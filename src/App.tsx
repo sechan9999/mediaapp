@@ -68,12 +68,32 @@ const App: React.FC = () => {
             });
 
             let combinedStream = displayStream;
+
             try {
-                const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const tracks = [...displayStream.getTracks(), ...audioStream.getAudioTracks()];
+                const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                // Audio mixing using AudioContext
+                const audioContext = new AudioContext();
+                const destination = audioContext.createMediaStreamDestination();
+
+                // If displayStream has audio (system audio)
+                if (displayStream.getAudioTracks().length > 0) {
+                    const systemSource = audioContext.createMediaStreamSource(new MediaStream([displayStream.getAudioTracks()[0]]));
+                    systemSource.connect(destination);
+                }
+
+                // Microphone audio
+                const micSource = audioContext.createMediaStreamSource(micStream);
+                micSource.connect(destination);
+
+                // Combine display video with mixed audio
+                const tracks = [
+                    ...displayStream.getVideoTracks(),
+                    ...destination.stream.getAudioTracks()
+                ];
                 combinedStream = new MediaStream(tracks);
             } catch (err) {
-                console.warn("Mic access denied.");
+                console.warn("Microphone access denied or failed. Capturing screen audio only.");
             }
 
             setStream(combinedStream);
@@ -89,8 +109,7 @@ const App: React.FC = () => {
                     setRecordedChunks([...chunks]);
 
                     if (mode === 'stream') {
-                        // Mock streaming: Send chunks to server here
-                        // socket.emit('stream-chunk', event.data);
+                        // Mock streaming logic
                     }
                 }
             };
@@ -143,7 +162,7 @@ const App: React.FC = () => {
                 'output.webm'
             ]);
 
-            const data = await ffmpeg.readFile('output.webm');
+            const data: any = await ffmpeg.readFile('output.webm');
             const url = URL.createObjectURL(new Blob([data], { type: 'video/webm' }));
             setPreviewUrl(url);
             alert("Video trimmed successfully (First 10s captured)!");
@@ -276,13 +295,13 @@ const App: React.FC = () => {
                             <div className="space-y-4">
                                 <label className="text-xs font-black uppercase text-gray-500 tracking-widest">Input Matrix</label>
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex flex-col items-center gap-2">
-                                        <Monitor className="w-6 h-6 text-blue-400" />
-                                        <span className="text-[10px] font-bold">EXTERN DISPLAY</span>
+                                    <div className={`p-4 rounded-2xl border flex flex-col items-center gap-2 grow ${isRecording || isStreaming || stream ? 'bg-blue-500/10 border-blue-500/40' : 'bg-white/5 border-white/5 opacity-30'}`}>
+                                        <Monitor className={`w-6 h-6 ${isRecording || isStreaming || stream ? 'text-blue-400' : ''}`} />
+                                        <span className="text-[10px] font-bold uppercase transition-all whitespace-nowrap">Display Capture</span>
                                     </div>
-                                    <div className="p-4 rounded-2xl bg-white/5 border border-white/5 flex flex-col items-center gap-2 opacity-30">
-                                        <Mic className="w-6 h-6" />
-                                        <span className="text-[10px] font-bold">SYSTEM AUDIO</span>
+                                    <div className={`p-4 rounded-2xl border flex flex-col items-center gap-2 grow ${isRecording || isStreaming || stream ? 'bg-purple-500/10 border-purple-500/40' : 'bg-white/5 border-white/5 opacity-30'}`}>
+                                        <Mic className={`w-6 h-6 ${isRecording || isStreaming || stream ? 'text-purple-400' : ''}`} />
+                                        <span className="text-[10px] font-bold uppercase transition-all whitespace-nowrap">Voice Active</span>
                                     </div>
                                 </div>
                             </div>
